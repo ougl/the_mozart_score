@@ -204,6 +204,30 @@
       #search-wrap{ top: 12px; left: 12px; width: calc(100vw - 24px); }
     }
 
+  
+    /* --- Mobile safety: overlay must always be on top, even if Tailwind CDN fails --- */
+    #overlay{
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+    #start-btn{
+      position: relative;
+      z-index: 2001;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+    /* Ensure the SVG stays below the overlay */
+    #viz{ position: relative; z-index: 1; }
+
+    /* Better touch behavior for the graph */
+    svg{ touch-action: none; }
+
   </style>
 </head>
 <body>
@@ -974,36 +998,51 @@ async function playPreview(name) {
     }
 
     // === 9) Start button (same vibe) ===
-    document.getElementById('start-btn').onclick = async () => {
-  try {
-    // 1) Déverrouille l’audio sur geste utilisateur
-    const unlock = new Audio();
-    unlock.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAA=="; // micro-silence
-    try { await unlock.play(); } catch {}
+    const startBtn = document.getElementById('start-btn');
+    let __started = false;
 
-    await loadGraph();
+    async function startExperience(e){
+      if (__started) return;
+      __started = true;
 
-    document.getElementById('overlay').style.opacity = '0';
-    setTimeout(() => {
-      document.getElementById('overlay').style.display = 'none';
+      // Mobile: avoid ghost clicks / event bubbling
+      try { e && e.preventDefault && e.preventDefault(); } catch {}
+      try { e && e.stopPropagation && e.stopPropagation(); } catch {}
 
-      const mozart =
-        nodeById.get("Q254") ||
-        fullDatabase.nodes.find(n => /mozart/i.test(n.label || n.name || "")) ||
-        fullDatabase.nodes.find(n => n.isSun) ||
-        fullDatabase.nodes[0];
+      try {
+        // 1) Déverrouille l’audio sur geste utilisateur
+        const unlock = new Audio();
+        unlock.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAA=="; // micro-silence
+        try { await unlock.play(); } catch {}
 
-      if (!mozart) return;
+        await loadGraph();
 
-      // Tu peux garder le timeout pour l’anim, l’audio est “unlocked”
-      setTimeout(() => selectComposer(mozart), 500);
-    }, 2000);
-  } catch (err) {
+        document.getElementById('overlay').style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('overlay').style.display = 'none';
+
+          const mozart =
+            nodeById.get("Q254") ||
+            fullDatabase.nodes.find(n => /mozart/i.test(n.label || n.name || "")) ||
+            fullDatabase.nodes.find(n => n.isSun) ||
+            fullDatabase.nodes[0];
+
+          if (!mozart) return;
+
+          // Tu peux garder le timeout pour l’anim, l’audio est “unlocked”
+          setTimeout(() => selectComposer(mozart), 500);
+        }, 2000);
+      } catch (err) {
         const status = document.getElementById("load-status");
         status.textContent = "Erreur de chargement. Vérifie le nom du JSON et lance via un serveur HTTP.";
         console.error(err);
-  }
-};
+        __started = false; // allow retry
+      }
+    }
+
+    // Click + touch support (iOS/Android)
+    startBtn.addEventListener("click", startExperience, { passive: false });
+    startBtn.addEventListener("touchend", startExperience, { passive: false });
 
   </script>
 </body>
