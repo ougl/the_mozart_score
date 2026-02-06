@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Mozart Score</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+      color: #f8fafc;
+      overflow: hidden;
+      font-family: 'serif', system-ui, sans-serif;
+    }
+
+    .ambient-glow {
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .node circle {
+      stroke-width: 1px;
+      transition: opacity 0.8s ease, filter 0.3s ease;
+      cursor: pointer;
+    }
+
+    .node:hover circle {
+      filter: brightness(1.4) drop-shadow(0 0 10px rgba(255,255,255,0.2));
+    }
+
+    .node.selected circle {
+      stroke: #fff;
+      stroke-width: 2px;
+      filter: drop-shadow(0 0 25px rgba(255,255,255,0.4));
+    }
+
+    .link-container { cursor: pointer; }
+
+    .link-bg {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 15px;
+    }
+
+    .link-main {
+      fill: none;
+      stroke-width: 1.5px;
+      stroke-opacity: 0.15;
+      transition: stroke-opacity 0.6s ease, stroke-width 0.6s ease;
+      pointer-events: none;
+      stroke: #94a3b8;
+    }
+
+    .link-container:hover .link-main {
+      stroke-opacity: 0.6;
+      stroke-width: 2px;
+      stroke: #fff;
+    }
+
+    .label {
+      font-size: 9px;
+      font-family: 'serif';
+      font-style: italic;
+      fill: rgba(255,255,255,0.4);
+      letter-spacing: 0.12em;
+      pointer-events: none;
+      transition: fill 0.8s ease;
+    }
+
+    .node.selected .label { fill: rgba(255,255,255,1); font-size: 10px; }
+
+    #bio-card {
+      position: absolute;
+      top: 40px;
+      right: 40px;
+      width: 340px;
+      background: rgba(2, 6, 23, 0.6);
+      backdrop-filter: blur(25px);
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      display: none;
+      z-index: 100;
+      padding: 30px 25px;
+    }
+
+    .bio-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+
+    #bio-image {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      object-fit: cover;
+      filter: grayscale(0.2);
+      border: 1px solid rgba(255,255,255,0.15);
+      flex-shrink: 0;
+    }
+
+    #bio-name { margin-bottom: 4px; }
+
+    #music-player {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      background: transparent;
+      display: none;
+      z-index: 100;
+    }
+
+    .timeline-axis { stroke: rgba(255,255,255,0.05); stroke-dasharray: 4; }
+    .timeline-label { fill: rgba(255,255,255,0.15); font-size: 14px; font-family: serif; font-style: italic; }
+
+    #legend {
+      position: absolute;
+      bottom: 40px;
+      right: 40px;
+      display: flex;
+      gap: 20px;
+      opacity: 0.5;
+      transition: opacity 0.5s;
+    }
+    #legend:hover { opacity: 1; }
+
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
+    .legend-color { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 5px currentColor; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in { animation: fadeIn 2s ease-out; }
+  
+    /* ---------------- Search UI ---------------- */
+    #search-wrap{
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      z-index: 150;
+      width: min(460px, calc(100vw - 48px));
+    }
+    #search-input{
+      width: 100%;
+      background: rgba(2, 6, 23, 0.55);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.85);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      outline: none;
+    }
+    #search-input::placeholder{ color: rgba(255,255,255,0.25); }
+    #search-results{
+      margin-top: 10px;
+      background: rgba(2, 6, 23, 0.62);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      overflow: hidden;
+      display: none;
+    }
+    .sr-item{
+      padding: 10px 12px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.75);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+    }
+    .sr-item small{ color: rgba(255,255,255,0.25); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;}
+    .sr-item:hover, .sr-item.active{ background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.95); }
+
+    /* ---------------- Responsive ---------------- */
+    @media (max-width: 900px){
+      #legend{ right: 18px; bottom: 18px; gap: 14px; }
+      #music-player{ left: 18px; bottom: 18px; }
+      #bio-card{ right: 18px; top: 18px; width: min(340px, calc(100vw - 36px)); }
+      #search-wrap{ top: 18px; left: 18px; width: min(520px, calc(100vw - 36px)); }
+    }
+    @media (max-width: 640px){
+      body{ overflow: hidden; }
+      #legend{ display: none; }
+      #music-player{ left: 12px; bottom: 12px; }
+      #bio-card{
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 12px;
+        width: auto;
+        max-height: 46vh;
+        padding: 18px 16px;
+        border-left: 0;
+        border-top: 1px solid rgba(255,255,255,0.10);
+      }
+      #bio-desc{ max-height: 24vh; }
+      #search-wrap{ top: 12px; left: 12px; width: calc(100vw - 24px); }
+    }
+
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <div id="search-wrap" class="fade-in">
+    <input id="search-input" type="text" autocomplete="off" spellcheck="false"
+      placeholder="Rechercher un nœud… (ex: Mozart, Donizetti)"/>
+    <div id="search-results" aria-label="Résultats de recherche"></div>
+  </div>
+
+
+  <div id="overlay" class="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center z-[2000] transition-opacity duration-[2000ms]">
+    <h1 class="text-4xl font-serif italic text-white/80 mb-2 tracking-[0.2em]">The Mozart Score</h1>
+    <button id="start-btn" class="px-12 py-3 border border-white/10 rounded-full text-white/50 text-[10px] tracking-[0.3em] uppercase hover:border-white/40 hover:text-white transition-all duration-700">
+      Lancer la symphonie 🎶
+    </button>
+    <p id="load-status" class="mt-8 text-[10px] tracking-[0.2em] text-white/20 uppercase"></p>
+  </div>
+
+  <!-- Cartouche de droite -->
+  <div id="bio-card" class="fade-in">
+    <div class="bio-header">
+      <img id="bio-image" src="" alt="Portrait" onerror="this.style.display='none'">
+      <div class="flex flex-col justify-center">
+        <h2 id="bio-name" class="text-lg font-serif italic text-white/90"></h2>
+        <div id="bio-dates" class="text-[9px] tracking-[0.2em] text-white/30 uppercase"></div>
+      </div>
+    </div>
+    <p id="bio-desc" class="text-xs text-white/50 leading-relaxed font-light mb-8 max-h-60 overflow-y-auto pr-4 italic"></p>
+    <div class="flex justify-end">
+      <button onclick="document.getElementById('bio-card').style.display='none'" class="text-[9px] uppercase tracking-widest text-white/20 hover:text-white transition-colors">Fermer</button>
+    </div>
+  </div>
+
+    <div id="music-player">
+    <div class="flex flex-col gap-1">
+        <p id="player-track" class="text-[10px] italic text-white/40 font-light"></p>
+        <p id="player-role" class="text-[9px] uppercase tracking-[0.2em] text-white/25"></p>
+
+        <div class="flex items-center gap-4">
+        <button id="play-pause-btn" class="text-white/60 hover:text-white transition-colors">
+            <svg id="play-icon" class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="pause-icon" class="w-3 h-3 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+
+        <div class="w-32 h-[1px] bg-white/10 relative">
+            <div id="audio-progress" class="absolute top-0 left-0 h-full bg-white/40 transition-all" style="width: 0%"></div>
+        </div>
+        </div>
+    </div>
+    </div>
+
+  <div id="legend">
+    <div class="legend-item"><div class="legend-color" style="background: #a78bfa; color: #a78bfa;"></div> Baroque</div>
+    <div class="legend-item"><div class="legend-color" style="background: #fde047; color: #fde047;"></div> Classique</div>
+    <div class="legend-item"><div class="legend-color" style="background: #fb7185; color: #fb7185;"></div> Romantique</div>
+    <div class="legend-item"><div class="legend-color" style="background: #38bdf8; color: #38bdf8;"></div> Moderne</div>
+  </div>
+
+  <svg id="viz" class="w-full h-screen"></svg>
+
+  <script>
+    // === 1) CONFIG: JSON file to load (put it next to this HTML) ===
+    const GRAPH_JSON_URL = "./mozart_relations_filtered.json"; // <- change if needed
+
+    const genreColors = {
+      "Baroque": "#a78bfa",
+      "Classique": "#fde047",
+      "Romantique": "#fb7185",
+      "Moderne": "#38bdf8"
+    };
+
+    // === 2) Helpers: parse Wikidata time like "+1756-01-27T00:00:00Z" -> 1756 ===
+    function parseYear(wdTime) {
+      if (!wdTime || typeof wdTime !== "string") return null;
+      const m = wdTime.match(/^[+-]?(\d{4})-/);
+      return m ? Number(m[1]) : null;
+    }
+
+    // Simple era classifier (keeps your 3-era vibe, adds Moderne)
+    function inferGenre(birthYear) {
+      if (!birthYear) return "Classique";
+      if (birthYear < 1750) return "Baroque";
+      if (birthYear < 1820) return "Classique";
+      if (birthYear < 1910) return "Romantique";
+      return "Moderne";
+    }
+
+    // Prefer a clean label: name if present, else id
+    function labelFromNode(n) {
+      return (n && n.name) ? n.name : (n && n.id) ? n.id : "Unknown";
+    }
+
+    // For Wikipedia summary: prefer title extracted from node.wikipedia URL if present
+    function wikiTitleFromNode(n) {
+      const url = n && n.wikipedia;
+      if (url && typeof url === "string") {
+        try {
+          const parts = url.split("/wiki/");
+          if (parts.length === 2) return decodeURIComponent(parts[1]);
+        } catch {}
+      }
+      // fallback: label (works often, not always)
+      return labelFromNode(n);
+    }
+
+    // === 3) D3 setup (same as yours) ===
+    let width = window.innerWidth, height = window.innerHeight;
+    const svg = d3.select("#viz").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`);
+    const g = svg.append("g");
+
+    let currentNodes = [];
+    let currentLinks = [];
+    let currentSelectedId = null;
+
+    const zoom = d3.zoom().scaleExtent([0.1, 2]).on("zoom", (e) => g.attr("transform", e.transform));
+    svg.call(zoom).on("dblclick.zoom", null);
+
+    // We set timeScale AFTER loading data (based on min/max birthYear)
+    let timeScale = d3.scaleLinear().domain([1670, 1900]).range([100, width * 1.5]);
+
+    const simulation = d3.forceSimulation()
+    .force("link", d3.forceLink().id(d => d.id).distance(240).strength(0.015))
+    .force("charge", d3.forceManyBody().strength(-260))
+    // X moins autoritaire = moins de bagarre verticale
+    .force("x", d3.forceX(d => timeScale(d.birthYear)).strength(1.2))
+    // Y un peu plus fort pour stabiliser mais pas trop pour éviter la "colonne"
+    .force("y", d3.forceY(height / 2).strength(0.12))
+    // collisions beaucoup plus douces
+    .force("collide", d3.forceCollide(d => d.isSun ? 60 : 28).strength(0.7))
+    // amortissement plus zen
+    .alphaDecay(0.03)
+    .velocityDecay(0.65)
+    .on("tick", ticked);
+
+    let linkGroup = g.append("g").selectAll(".link-container");
+    let nodeGroup = g.append("g").selectAll(".node");
+
+    function ticked() {
+      linkGroup.selectAll(".link-bg, .link-main").attr("d", d => {
+        const dx = d.target.x - d.source.x, dy = d.target.y - d.source.y;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
+        return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+      });
+      nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`);
+    }
+
+    // === 4) Data containers (same structure as your fullDatabase) ===
+    const fullDatabase = { nodes: [], links: [] };
+    const nodeById = new Map();
+    // --- Search index ---
+    let searchIndex = [];
+    const normStr = (s) => String(s || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/['’`]/g, "")
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    function buildSearchIndex(){
+      searchIndex = fullDatabase.nodes.map(n => ({
+        id: n.id,
+        label: n.label || n.name || n.id,
+        norm: normStr(n.label || n.name || n.id)
+      }));
+      // stable: alphabetical
+      searchIndex.sort((a,b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
+    }
+
+    function initSearchUI(){
+      const input = document.getElementById("search-input");
+      const box = document.getElementById("search-results");
+      if (!input || !box) return;
+
+      let activeIdx = -1;
+      let lastResults = [];
+
+      const hide = () => { box.style.display = "none"; box.innerHTML = ""; activeIdx = -1; lastResults = []; };
+      const show = (items) => {
+        lastResults = items;
+        box.innerHTML = "";
+        if (!items.length) { hide(); return; }
+        items.forEach((it, idx) => {
+          const row = document.createElement("div");
+          row.className = "sr-item" + (idx === activeIdx ? " active" : "");
+          row.innerHTML = `<span>${it.label}</span><small>${it.id}</small>`;
+          row.onmouseenter = () => { activeIdx = idx; refreshActive(); };
+          row.onclick = () => {
+            const node = nodeById.get(it.id);
+            if (node) {
+              hide();
+              input.blur();
+              selectComposer(node);
+            }
+          };
+          box.appendChild(row);
+        });
+        box.style.display = "block";
+      };
+
+      const refreshActive = () => {
+        const kids = Array.from(box.children);
+        kids.forEach((el, i) => el.classList.toggle("active", i === activeIdx));
+      };
+
+      const search = (q) => {
+        const nq = normStr(q);
+        if (!nq || nq.length < 2) return [];
+        // quick scoring: startsWith > includes
+        const res = [];
+        for (const it of searchIndex) {
+          const pos = it.norm.indexOf(nq);
+          if (pos === -1) continue;
+          const score = (pos === 0 ? 0 : 10) + it.norm.length; // lower is better
+          res.push({ ...it, _score: score });
+          if (res.length > 60) break; // bound work
+        }
+        res.sort((a,b) => a._score - b._score);
+        return res.slice(0, 10);
+      };
+
+      input.addEventListener("input", () => {
+        activeIdx = -1;
+        show(search(input.value));
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { hide(); return; }
+        if (!lastResults.length) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          activeIdx = Math.min(lastResults.length - 1, activeIdx + 1);
+          refreshActive();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          activeIdx = Math.max(0, activeIdx - 1);
+          refreshActive();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          const pick = lastResults[Math.max(0, activeIdx)];
+          if (pick) {
+            const node = nodeById.get(pick.id);
+            if (node) { hide(); input.blur(); selectComposer(node); }
+          }
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        const t = e.target;
+        if (!t) return;
+        if (t === input || box.contains(t)) return;
+        hide();
+      });
+    }
+
+
+    // --- "Voyage" mode: always show ONLY center + N+1 neighbors ---
+    function setCenter(centerId){
+      const centerRaw = nodeById.get(centerId);
+      if (!centerRaw) return;
+
+      // neighbors = N+2 (center + direct neighbors + neighbors-of-neighbors)
+const visited = new Set([centerId]);
+let frontier = new Set([centerId]);
+
+for (let depth = 0; depth < 2; depth++) {
+  const next = new Set();
+  fullDatabase.links.forEach(l => {
+    const srcId = l.source.id || l.source;
+    const tgtId = l.target.id || l.target;
+
+    if (frontier.has(srcId) && !visited.has(tgtId)) next.add(tgtId);
+    if (frontier.has(tgtId) && !visited.has(srcId)) next.add(srcId);
+  });
+
+  next.forEach(v => visited.add(v));
+  frontier = next;
+}
+
+
+      const centerY = height / 2;
+      const centerX = timeScale(centerRaw.birthYear || timeScale.domain()[0]);
+
+      // Rebuild nodes/links from scratch
+      currentNodes = [];
+      currentLinks = [];
+
+      visited.forEach(vid => {
+        const data = nodeById.get(vid);
+        if (!data) return;
+        const isCenter = (vid === centerId);
+        data.x = isCenter ? centerX : timeScale(data.birthYear || timeScale.domain()[0]);
+        data.y = centerY + (Math.random() - 0.5) * (isCenter ? 1 : 220);
+        currentNodes.push(data);
+      });
+
+      fullDatabase.links.forEach(l => {
+        const srcId = l.source.id || l.source;
+        const tgtId = l.target.id || l.target;
+        if (visited.has(srcId) && visited.has(tgtId)) {
+          currentLinks.push({
+            source: srcId,
+            target: tgtId,
+            relation: l.relation,
+            direction: l.direction,
+            property: l.property
+          });
+        }
+      });
+
+      updateViz();
+      simulation.alpha(0.7).restart();
+    }
+
+    // --- Responsive resize (keeps the feel + timeline aligned) ---
+    let minYearGlobal = 1670;
+    let maxYearGlobal = 1900;
+    let xStrengthGlobal = 5;
+    let xRangeStartGlobal = 200;
+    let xRangeFactorGlobal = 5;
+
+    function onResize(){
+      width = window.innerWidth;
+      height = window.innerHeight;
+
+      // Update SVG viewport
+      svg.attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`);
+
+      // Update scale range (domain is set after load)
+      timeScale.range([xRangeStartGlobal, width * xRangeFactorGlobal]);
+
+      // Update forces
+      simulation.force("x", d3.forceX(d => timeScale(d.birthYear)).strength(xStrengthGlobal));
+      simulation.force("y", d3.forceY(height / 2).strength(0.12));
+
+      // Redraw timeline with latest bounds
+      drawTimeline(minYearGlobal, maxYearGlobal);
+
+      simulation.alpha(0.25).restart();
+    }
+    window.addEventListener("resize", () => {
+      // small debounce
+      clearTimeout(window.__moz_resize_t);
+      window.__moz_resize_t = setTimeout(onResize, 120);
+    });
+
+
+    // === 5) Incremental expansion logic (same as yours) ===
+    function expandFrom(centerId) {
+      let visited = new Set([centerId]);
+
+      fullDatabase.links.forEach(l => {
+        const srcId = l.source.id || l.source;
+        const tgtId = l.target.id || l.target;
+
+        let neighborId = (srcId === centerId) ? tgtId
+                      : (tgtId === centerId) ? srcId
+                      : null;
+
+        if (neighborId) visited.add(neighborId);
+      });
+
+      visited.forEach(vid => {
+        if (!currentNodes.find(cn => cn.id === vid)) {
+          const data = nodeById.get(vid);
+          if (data) {
+            const parent = currentNodes.find(cn => cn.id === centerId) || { x: width/2, y: height/2 };
+            currentNodes.push({
+              ...data,
+              x: timeScale(data.birthYear || timeScale.domain()[0]),
+              y: parent.y + (Math.random() - 0.5) * 18
+            });
+          }
+        }
+      });
+
+      visited.forEach(() => {
+        fullDatabase.links.forEach(l => {
+          const srcId = l.source.id || l.source;
+          const tgtId = l.target.id || l.target;
+          if (visited.has(srcId) && visited.has(tgtId)) {
+            const exists = currentLinks.some(cl =>
+              ( (cl.source.id || cl.source) === srcId && (cl.target.id || cl.target) === tgtId ) ||
+              ( (cl.source.id || cl.source) === tgtId && (cl.target.id || cl.target) === srcId )
+            );
+            if (!exists) currentLinks.push({ source: srcId, target: tgtId });
+          }
+        });
+      });
+
+      updateViz();
+      simulation.alpha(0.3).restart();
+    }
+
+    function updateViz() {
+      const defs = svg.select("defs").size() ? svg.select("defs") : svg.append("defs");
+
+      currentNodes.forEach(n => {
+        const color = genreColors[n.genre] || "#ffffff";
+        if (!document.getElementById(`grad-${n.id}`)) {
+          const grad = defs.append("radialGradient").attr("id", `grad-${n.id}`);
+          grad.append("stop").attr("offset", "0%").attr("stop-color", color).attr("stop-opacity", 1);
+          grad.append("stop").attr("offset", "100%").attr("stop-color", d3.color(color).darker(2)).attr("stop-opacity", 0.4);
+        }
+      });
+
+      linkGroup = linkGroup.data(currentLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}-${d.property || ""}-${d.direction || ""}`)
+        .join(enter => {
+          const sel = enter.append("g").attr("class", "link-container")
+            .on("click", (e, d) => {
+              const srcId = d.source.id || d.source;
+              const tgtId = d.target.id || d.target;
+              const nextNodeId = (srcId === currentSelectedId) ? tgtId : srcId;
+              const nextNode = currentNodes.find(n => n.id === nextNodeId) || nodeById.get(nextNodeId);
+              if (nextNode) selectComposer(nextNode);
+            });
+          sel.append("path").attr("class", "link-bg");
+          sel.append("path").attr("class", "link-main");
+          return sel;
+        });
+
+      nodeGroup = nodeGroup.data(currentNodes, d => d.id)
+        .join(enter => {
+          const sel = enter.append("g").attr("class", "node")
+            .on("click", (e, d) => selectComposer(d));
+          sel.append("circle").attr("r", d => d.isSun ? 35 : 18)
+            .attr("fill", d => `url(#grad-${d.id})`);
+          sel.append("text").attr("dy", d => d.isSun ? 55 : 35)
+            .attr("text-anchor", "middle").attr("class", "label").text(d => d.label);
+          return sel;
+        });
+      // ✅ keep selection visible after setCenter()/updateViz rebuilds DOM
+      nodeGroup.classed("selected", n => n.id === currentSelectedId);
+      simulation.nodes(currentNodes);
+      simulation.force("link").links(currentLinks);
+    }
+
+    // === 6) Timeline (recomputed after load) ===
+    let timelineLayer = null;
+    function drawTimeline(minYear, maxYear) {
+      if (timelineLayer) timelineLayer.remove();
+      timelineLayer = g.append("g").attr("class", "timeline-layer");
+
+      // choose ticks similar to your original (but data-driven)
+      const span = maxYear - minYear;
+      const step = Math.max(50, span > 400 ? 100 : span > 250 ? 50 : 25);
+      const start = Math.floor(minYear / step) * step;
+      const end = Math.ceil(maxYear / step) * step;
+
+      const years = [];
+      for (let y = start; y <= end; y += step) years.push(y);
+
+      timelineLayer.selectAll(".timeline-axis").data(years).join("line").attr("class", "timeline-axis")
+        .attr("x1", d => timeScale(d)).attr("x2", d => timeScale(d)).attr("y1", 0).attr("y2", height);
+
+      timelineLayer.selectAll(".timeline-label").data(years).join("text").attr("class", "timeline-label")
+        .attr("x", d => timeScale(d) + 10).attr("y", height - 40).text(d => d);
+    }
+
+    // === 7) Selection UI (same, but uses wikipedia title when possible) ===
+    let currentAudio = null;
+
+    async function selectComposer(d) {
+      const target = d;
+      currentSelectedId = target.id;
+
+      nodeGroup.classed("selected", n => n.id === target.id);
+      setCenter(target.id);
+
+      const live = currentNodes.find(n => n.id === target.id) || target;
+      const lx = (typeof live.x === "number" && isFinite(live.x)) ? live.x : (width / 2);
+      const ly = (typeof live.y === "number" && isFinite(live.y)) ? live.y : (height / 2);
+
+      const x = width / 2 - lx;
+      const y = height / 2 - ly;
+
+      svg.transition()
+        .duration(2000)
+        .ease(d3.easePolyOut.exponent(3))
+        .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(1.1));
+
+      const card = document.getElementById('bio-card');
+      card.style.display = 'block';
+
+      document.getElementById('bio-name').innerText = target.label;
+
+      const by = target.birthYear ?? "—";
+      const dy = target.deathYear ?? "—";
+      document.getElementById('bio-dates').innerText = `${by} — ${dy}`;
+
+      // Prefer node.wikipedia title if available
+      fetchWiki(target._raw || target, target.label);
+      playPreview(target.label);
+    }
+
+    async function fetchWiki(nodeOrRaw, fallbackLabel) {
+      try {
+        const title = wikiTitleFromNode(nodeOrRaw) || fallbackLabel;
+        const res = await fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+        const wiki = await res.json();
+
+        document.getElementById('bio-desc').innerText = wiki.extract || "";
+
+        const img = document.getElementById('bio-image');
+        if (wiki.thumbnail) {
+          img.src = wiki.thumbnail.source;
+          img.style.display = 'block';
+        } else if (nodeOrRaw && nodeOrRaw.image) {
+          img.src = nodeOrRaw.image;
+          img.style.display = 'block';
+        } else {
+          img.style.display = 'none';
+        }
+      } catch(e) {}
+    }
+
+    const norm = (s) => String(s || "")
+  .toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/['’`]/g, "")
+  .replace(/\s+/g, " ")
+  .trim();
+
+    const looksLikeEnsemble = (artistName) => {
+    const s = norm(artistName);
+    return /\b(orchestra|philharm|ensemble|choir|chorus|quartet|quintet|trio|duo|symphony|sinfonia|band|conduct|dirig|kamer|filharm)\b/.test(s);
+    };
+
+    const looksLikeComposerWork = (text) => {
+    const s = norm(text);
+    return /\b(symphon|concerto|sonata|nocturne|etude|suite|overture|requiem|mass|op\.|opus|bwv|kv|k\.|hob\.|rv\s*\d|s\.\s*\d|wq\s*\d|sz\s*\d|no\.\s*\d)\b/.test(s);
+    };
+
+    const mentionsTargetAsComposer = (target, trackName, collectionName) => {
+    const t = norm(target);
+    const a = norm(trackName);
+    const b = norm(collectionName);
+
+    // "mozart:" ou "mozart -"
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${esc(t)}\\b\\s*[:\\-]`);
+    return re.test(a) || re.test(b) || a.includes(`${t} `) || b.includes(`${t} `);
+    };
+
+
+async function itunesSearch(term, attribute, limit = 25) {
+  const base = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicTrack&limit=${limit}`;
+  const url = attribute ? `${base}&attribute=${attribute}` : base;
+  const res = await fetch(url);
+  const json = await res.json();
+  return json?.results ?? [];
+}
+
+function includesNameInTitles(targetName, r) {
+  const t = norm(targetName);
+  const track = norm(r.trackName || "");
+  const coll  = norm(r.collectionName || "");
+  // "name: ..." or just contains the name
+  return track.includes(t) || coll.includes(t) || mentionsTargetAsComposer(targetName, r.trackName || "", r.collectionName || "");
+}
+
+async function playPreview(name) {
+  // Fade out previous (tu l'avais déjà : je le garde tel quel)
+  if (currentAudio) {
+    const oldAudio = currentAudio;
+    let vol = oldAudio.volume;
+    const interval = setInterval(() => {
+      vol = Math.max(0, vol - 0.05);
+      oldAudio.volume = vol;
+      if (vol <= 0) {
+        oldAudio.pause();
+        clearInterval(interval);
+      }
+    }, 50);
+  }
+
+  const player = document.getElementById("music-player");
+  if (!player) return;
+
+  if (!name || typeof name !== "string") {
+    player.style.display = "none";
+    currentAudio = null;
+    return;
+  }
+
+  try {
+    // ---------- 1) PRIORITÉ: compositeurTerm ----------
+    let results = await itunesSearch(name, "composerTerm", 25);
+    let candidates = (results || []).filter(r => !!r.previewUrl);
+
+    // si possible, privilégier le classique
+
+
+    let pick = candidates[0];
+    let mode = "composerTerm";
+
+    // ---------- 2) FALLBACK: recherche large + match dans titres ----------
+    if (!pick) {
+      results = await itunesSearch(name, null, 50);
+      candidates = (results || []).filter(r => !!r.previewUrl);
+
+      let filtered = candidates.filter(r => includesNameInTitles(name, r));
+
+
+      pick = filtered[0];
+      mode = "titleMatch";
+    }
+
+    // ---------- 3) RIEN => pas de musique ----------
+    if (!pick) {
+      player.style.display = "none";
+      currentAudio = null;
+      return;
+    }
+
+    // ---------- UI ----------
+    player.style.display = "block";
+
+    const trackEl = document.getElementById("player-track");
+    if (trackEl) {
+      trackEl.innerText = (pick.trackName || "") + (pick.artistName ? ` — ${pick.artistName}` : "");
+    }
+
+    const roleEl = document.getElementById("player-role");
+    if (roleEl) {
+      roleEl.innerText =
+        (mode === "composerTerm")
+          ? `Compositeur : ${name} • Interprète : ${pick.artistName || "—"}`
+          : `Match titre (fallback) • Interprète : ${pick.artistName || "—"}`;
+    }
+
+    // ---------- Audio ----------
+    currentAudio = new Audio(pick.previewUrl);
+    currentAudio.volume = 0;
+
+    await currentAudio.play();
+
+    // Fade in
+    let vol = 0;
+    const fadeIn = setInterval(() => {
+      vol = Math.min(0.35, vol + 0.02);
+      if (currentAudio) currentAudio.volume = vol;
+      if (vol >= 0.35) clearInterval(fadeIn);
+    }, 100);
+
+    document.getElementById("pause-icon")?.classList.remove("hidden");
+    document.getElementById("play-icon")?.classList.add("hidden");
+
+    currentAudio.ontimeupdate = () => {
+      const dur = currentAudio?.duration || 0;
+      const progress = dur ? (currentAudio.currentTime / dur) * 100 : 0;
+      const bar = document.getElementById("audio-progress");
+      if (bar) bar.style.width = progress + "%";
+    };
+
+  } catch (e) {
+    console.error("playPreview failed:", e);
+    player.style.display = "none";
+    currentAudio = null;
+  }
+}
+
+
+
+
+
+
+    document.getElementById('play-pause-btn').onclick = () => {
+      if (!currentAudio) return;
+      if (currentAudio.paused) {
+        currentAudio.play();
+        document.getElementById('pause-icon').classList.remove('hidden');
+        document.getElementById('play-icon').classList.add('hidden');
+      } else {
+        currentAudio.pause();
+        document.getElementById('pause-icon').classList.add('hidden');
+        document.getElementById('play-icon').classList.remove('hidden');
+      }
+    };
+
+    // === 8) Load graph JSON and wire it into fullDatabase (KEY CHANGE) ===
+    async function loadGraph() {
+      const status = document.getElementById("load-status");
+      status.textContent = "Chargement du graphe…";
+
+      const res = await fetch(GRAPH_JSON_URL);
+      if (!res.ok) throw new Error(`Failed to fetch ${GRAPH_JSON_URL}: ${res.status}`);
+      const graph = await res.json();
+
+      status.textContent = "Préparation…";
+
+      // Convert nodes
+      const rawNodes = graph.nodes || [];
+      fullDatabase.nodes = rawNodes.map(n => {
+        const by = parseYear(n.birth);
+        const dy = parseYear(n.death);
+        const genre = inferGenre(by);
+
+        const converted = {
+          id: n.id,
+          label: labelFromNode(n),
+          birthYear: by ?? 1800,
+          deathYear: dy ?? null,
+          genre,
+          isSun: n.id === graph.center,
+          _raw: n // keep original for wikipedia/image
+        };
+        nodeById.set(converted.id, converted);
+        return converted;
+      });
+
+      // Convert links (your JSON uses "edges")
+      const rawEdges = graph.edges || [];
+      fullDatabase.links = rawEdges.map(e => ({
+        source: e.source,
+        target: e.target,
+        property: e.property,
+        relation: e.relation,
+        direction: e.direction
+      }));
+
+      
+      // Deduplicate edges: keep only one link per pair of nodes (A-B), even if multiple relations exist
+      // We treat the pair as undirected to avoid double links in both directions.
+      (function dedupeLinks(){
+        const seen = new Map();
+        const out = [];
+        for (const e of fullDatabase.links){
+          const a = String(e.source);
+          const b = String(e.target);
+          const k = (a < b) ? (a + "||" + b) : (b + "||" + a);
+          if (seen.has(k)) continue;
+          seen.set(k, true);
+          out.push(e);
+        }
+        fullDatabase.links = out;
+      })();
+// Update time scale domain from data
+      const years = fullDatabase.nodes
+        .map(n => n.birthYear)
+        .filter(y => typeof y === "number" && isFinite(y));
+
+      const minYear = Math.min(...years);
+      const maxYear = Math.max(...years);
+
+      // Keep your "stretched" look; extend range
+      minYearGlobal = minYear;
+      maxYearGlobal = maxYear;
+      timeScale = d3.scaleLinear()
+        .domain([minYear, maxYear])
+        .range([xRangeStartGlobal, width * xRangeFactorGlobal]);
+
+      // Rebind forceX to the new scale
+      xStrengthGlobal = 5;
+      simulation.force("x", d3.forceX(d => timeScale(d.birthYear)).strength(xStrengthGlobal));
+
+      // Search index
+      buildSearchIndex();
+      initSearchUI();
+
+      // Draw timeline
+      drawTimeline(minYear, maxYear);
+
+      status.textContent = `OK — ${fullDatabase.nodes.length} nœuds, ${fullDatabase.links.length} liens`;
+    }
+
+    // === 9) Start button (same vibe) ===
+    document.getElementById('start-btn').onclick = async () => {
+  try {
+    // 1) Déverrouille l’audio sur geste utilisateur
+    const unlock = new Audio();
+    unlock.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAA=="; // micro-silence
+    try { await unlock.play(); } catch {}
+
+    await loadGraph();
+
+    document.getElementById('overlay').style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('overlay').style.display = 'none';
+
+      const mozart =
+        nodeById.get("Q254") ||
+        fullDatabase.nodes.find(n => /mozart/i.test(n.label || n.name || "")) ||
+        fullDatabase.nodes.find(n => n.isSun) ||
+        fullDatabase.nodes[0];
+
+      if (!mozart) return;
+
+      // Tu peux garder le timeout pour l’anim, l’audio est “unlocked”
+      setTimeout(() => selectComposer(mozart), 500);
+    }, 2000);
+  } catch (err) {
+        const status = document.getElementById("load-status");
+        status.textContent = "Erreur de chargement. Vérifie le nom du JSON et lance via un serveur HTTP.";
+        console.error(err);
+  }
+};
+
+  </script>
+</body>
+</html>
