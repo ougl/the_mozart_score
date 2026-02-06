@@ -35,10 +35,6 @@ cd mozart-network
 
 2.  Ouvre simplement le fichier :
 
-``` bash
-index.html
-```
-
 Ou lance un petit serveur local :
 
 ``` bash
