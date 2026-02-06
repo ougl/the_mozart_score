@@ -240,7 +240,7 @@ body.overlay-open #overlay * {
 
   </style>
 </head>
-<body>
+<body class="overlay-open">
   <div class="ambient-glow"></div>
 
   <div id="search-wrap" class="fade-in">
@@ -802,8 +802,45 @@ function includesNameInTitles(targetName, r) {
   return track.includes(t) || coll.includes(t) || mentionsTargetAsComposer(targetName, r.trackName || "", r.collectionName || "");
 }
 
+
+function artistMatchesTarget(targetName, artistName){
+  const t = norm(targetName);
+  const a = norm(artistName || "");
+  if (!t || !a) return false;
+
+  const toks = t.split(" ").filter(x => x.length >= 2);
+  if (!toks.length) return false;
+
+  // Require at least last name token present
+  const last = toks[toks.length - 1];
+  if (!a.includes(last)) return false;
+
+  // If we have a first name, try to see it or its initial (but not mandatory)
+  if (toks.length >= 2) {
+    const first = toks[0];
+    if (a.includes(first)) return true;
+    const fi = first[0];
+    const initRe = new RegExp(`\b${fi}\b`);
+    if (initRe.test(a)) return true;
+  }
+
+  // Last-name match only: ok for ensembles / short names
+  return true;
+}
+
+function isRelevantToNode(targetName, r){
+  // Interpreter: node name appears in artistName (e.g. Glenn Gould)
+  if (artistMatchesTarget(targetName, r.artistName || "")) return { ok: true, role: "interpreter" };
+
+  // Composer: node name appears in title/album (e.g. "Bach: ...", "Mozart: ...")
+  if (includesNameInTitles(targetName, r)) return { ok: true, role: "composer" };
+
+  return { ok: false, role: null };
+}
+
+
 async function playPreview(name) {
-  // Fade out previous (tu l'avais déjà : je le garde tel quel)
+  // Fade out previous
   if (currentAudio) {
     const oldAudio = currentAudio;
     let vol = oldAudio.volume;
@@ -827,36 +864,29 @@ async function playPreview(name) {
   }
 
   try {
-    // ---------- 1) PRIORITÉ: compositeurTerm ----------
+    // 1) Try composerTerm first (often good)
     let results = await itunesSearch(name, "composerTerm", 25);
     let candidates = (results || []).filter(r => !!r.previewUrl);
-
-    // si possible, privilégier le classique
-
 
     let pick = candidates[0];
     let mode = "composerTerm";
 
-    // ---------- 2) FALLBACK: recherche large + match dans titres ----------
+    // 2) Fallback: wide search, take the first preview
     if (!pick) {
-      results = await itunesSearch(name, null, 50);
+      results = await itunesSearch(name, null, 80);
       candidates = (results || []).filter(r => !!r.previewUrl);
-
-      let filtered = candidates.filter(r => includesNameInTitles(name, r));
-
-
-      pick = filtered[0];
-      mode = "titleMatch";
+      pick = candidates[0];
+      mode = "fallback";
     }
 
-    // ---------- 3) RIEN => pas de musique ----------
+    // 3) No preview => hide player
     if (!pick) {
       player.style.display = "none";
       currentAudio = null;
       return;
     }
 
-    // ---------- UI ----------
+    // UI
     player.style.display = "block";
 
     const trackEl = document.getElementById("player-track");
@@ -868,11 +898,11 @@ async function playPreview(name) {
     if (roleEl) {
       roleEl.innerText =
         (mode === "composerTerm")
-          ? `Compositeur : ${name} • Interprète : ${pick.artistName || "—"}`
-          : `Match titre (fallback) • Interprète : ${pick.artistName || "—"}`;
+          ? `Suggestion iTunes • Réf : ${name} • Interprète : ${pick.artistName || "—"}`
+          : `Suggestion iTunes (fallback) • Réf : ${name} • Interprète : ${pick.artistName || "—"}`;
     }
 
-    // ---------- Audio ----------
+    // Audio
     currentAudio = new Audio(pick.previewUrl);
     currentAudio.volume = 0;
 
@@ -902,11 +932,6 @@ async function playPreview(name) {
     currentAudio = null;
   }
 }
-
-
-
-
-
 
     document.getElementById('play-pause-btn').onclick = () => {
       if (!currentAudio) return;
@@ -1030,6 +1055,7 @@ async function playPreview(name) {
         document.getElementById('overlay').style.opacity = '0';
         setTimeout(() => {
           document.getElementById('overlay').style.display = 'none';
+          try { document.body.classList.remove('overlay-open'); } catch {}
 
           const mozart =
             nodeById.get("Q254") ||
@@ -1054,7 +1080,97 @@ async function playPreview(name) {
     startBtn.addEventListener("click", startExperience, { passive: false });
     startBtn.addEventListener("touchend", startExperience, { passive: false });
     startBtn.addEventListener("touchstart", startExperience, { passive: false });
-
   </script>
+  <!-- Info button + panel -->
+  <div id="info-btn" title="À propos"
+    style="
+      position: fixed;
+      bottom: 10px;
+      right: 18px;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(2,6,23,0.55);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2500;
+      color: rgba(255,255,255,0.45);
+      font-family: serif;
+      font-style: italic;
+      transition: all 0.4s ease;
+      user-select: none;
+    ">i</div>
+
+  <div id="info-panel"
+    style="
+      position: fixed;
+      bottom: 62px;
+      right: 18px;
+      width: min(360px, calc(100vw - 36px));
+      background: rgba(2,6,23,0.72);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 16px 18px;
+      backdrop-filter: blur(18px);
+      z-index: 2500;
+      display: none;
+      animation: fadeIn 0.6s ease;
+    ">
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.65);margin:0;">
+        À propos
+      </h3>
+
+      <button id="info-close" aria-label="Fermer"
+        style="background:none;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-size:14px;">✕</button>
+    </div>
+
+    <p style="margin-top:10px;font-size:12px;line-height:1.5;color:rgba(255,255,255,0.55);font-style:italic;">
+      Ce graphe a été construit à partir de <b>Mozart</b>, en explorant récursivement
+      sur Wikidata les relations <i>élèves</i> et <i>professeurs</i>
+      (jusqu’à <b>10 niveaux</b>).
+    </p>
+
+    <p style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.08em;text-transform:uppercase;">
+      5465 nœuds • 6953 arcs
+    </p>
+
+    <p style="margin-top:10px;font-size:11px;color:rgba(255,255,255,0.40);">
+      Mesure d’audience anonyme via <b>Cloudflare Analytics</b>, sans cookies.
+    </p>
+  </div>
+
+  <script>
+    // Info panel toggle (no cookies)
+    (function(){
+      const infoBtn = document.getElementById("info-btn");
+      const infoPanel = document.getElementById("info-panel");
+      const infoClose = document.getElementById("info-close");
+      if (!infoBtn || !infoPanel || !infoClose) return;
+
+      function toggle(force){
+        if (force === true) infoPanel.style.display = "block";
+        else if (force === false) infoPanel.style.display = "none";
+        else infoPanel.style.display = (infoPanel.style.display === "block") ? "none" : "block";
+      }
+
+      infoBtn.addEventListener("click", (e) => { e.stopPropagation(); toggle(); }, { passive: true });
+      infoClose.addEventListener("click", (e) => { e.stopPropagation(); toggle(false); }, { passive: true });
+
+      document.addEventListener("click", (e) => {
+        if (infoPanel.style.display !== "block") return;
+        if (!infoPanel.contains(e.target) && e.target !== infoBtn) toggle(false);
+      });
+    })();
+  </script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "538bb0839df842118c48dfac8eb4a37b"}'></script>
+  <!-- End Cloudflare Web Analytics -->
 </body>
 </html>
