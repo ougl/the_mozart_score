@@ -205,23 +205,33 @@
     }
 
   
-    /* --- Mobile safety: overlay must always be on top, even if Tailwind CDN fails --- */
-    #overlay{
-      position: fixed;
-      inset: 0;
-      z-index: 2000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      pointer-events: auto;
-    }
+/* Overlay always on top */
+#overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: auto;
+}
+
+/* IMPORTANT: while overlay is visible, the graph must not receive touches */
+body.overlay-open #viz,
+body.overlay-open #viz * {
+  pointer-events: none !important;
+}
+
+/* Ensure overlay content can be tapped */
+body.overlay-open #overlay,
+body.overlay-open #overlay * {
+  pointer-events: auto !important;
+}
+
+/* Start button: iOS tap-friendly */
     #start-btn{
-      position: relative;
-      z-index: 2001;
-      pointer-events: auto;
+        z-index: 2001;
+        pointer-events: auto;
       touch-action: manipulation;
     }
+
     /* Ensure the SVG stays below the overlay */
     #viz{ position: relative; z-index: 1; }
 
@@ -1043,6 +1053,7 @@ async function playPreview(name) {
     // Click + touch support (iOS/Android)
     startBtn.addEventListener("click", startExperience, { passive: false });
     startBtn.addEventListener("touchend", startExperience, { passive: false });
+    startBtn.addEventListener("touchstart", startExperience, { passive: false });
 
   </script>
 </body>
