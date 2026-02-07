@@ -237,15 +237,50 @@ body.overlay-open #overlay * {
 
     /* Better touch behavior for the graph */
     svg{ touch-action: none; }
+  /* 🎷 Mini switch Mozart → Jazz */
+  #music-switch{
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 14px;
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(18px);
+
+    border: 1px solid rgba(255,255,255,0.10);
+    color: rgba(255,255,255,0.65);
+
+    font-size: 16px;
+    text-decoration: none;
+
+    transition: all 0.35s ease;
+  }
+
+  #music-switch:hover{
+    transform: scale(1.08);
+    border-color: rgba(255,255,255,0.35);
+    color: white;
+    box-shadow: 0 0 18px rgba(255,255,255,0.12);
+  }
   </style>
 </head>
 <body class="overlay-open">
   <div class="ambient-glow"></div>
+  <div id="search-wrap" class="fade-in" style="display:flex; gap:10px; align-items:center;">
 
-  <div id="search-wrap" class="fade-in">
+        <!-- 🎷 Switch vers Ray Charles -->
+    <a href="./jazz_swing.html" id="music-switch" title="Voyage vers Ray Charles">
+      🎷
+    </a>
+    <!-- Barre de recherche -->
     <input id="search-input" type="text" autocomplete="off" spellcheck="false"
       placeholder="Rechercher un nœud… (ex: Mozart, Donizetti)"/>
+
+
     <div id="search-results" aria-label="Résultats de recherche"></div>
   </div>
 
