@@ -238,34 +238,53 @@
     /* Better touch behavior for the graph */
     svg{ touch-action: none; }
     /* 🎷 Mini switch Mozart → Jazz */
-    #music-switch{
-      width: 42px;
-      height: 42px;
-      flex-shrink: 0;
+    /* Row: switch + input */
+.search-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-      display: flex;
-      align-items: center;
-      justify-content: center;
+/* Input grows normally */
+#search-input{
+  flex: 1;
+}
 
-      border-radius: 14px;
-      background: rgba(2, 6, 23, 0.55);
-      backdrop-filter: blur(18px);
+/* Results stay BELOW (no absolute needed) */
+#search-results{
+  margin-top: 10px;
+}
 
-      border: 1px solid rgba(255,255,255,0.10);
-      color: rgba(255,255,255,0.65);
+/* Cute portal button */
+#music-switch{
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
 
-      font-size: 16px;
-      text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-      transition: all 0.35s ease;
-    }
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(18px);
 
-    #music-switch:hover{
-      transform: scale(1.08);
-      border-color: rgba(255,255,255,0.35);
-      color: white;
-      box-shadow: 0 0 18px rgba(255,255,255,0.12);
-    }
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.65);
+
+  font-size: 16px;
+  text-decoration: none;
+
+  transition: all 0.35s ease;
+}
+
+#music-switch:hover{
+  transform: scale(1.08);
+  border-color: rgba(255,255,255,0.35);
+  color: white;
+  box-shadow: 0 0 18px rgba(255,255,255,0.12);
+}
+
 
   </style>
 </head>
@@ -273,17 +292,24 @@
 <body class="overlay-open">
   <div class="ambient-glow"></div>
 
-  <div id="search-wrap" class="fade-in" style="display:flex; gap:10px; align-items:center;">
-        <!-- 🎼 Switch vers Mozart -->
-    <a href="./index.html" id="music-switch" title="Retour vers Mozart">
-      🎼
-    </a>
+  <div id="search-wrap" class="fade-in">
 
-    <input id="search-input" type="text" autocomplete="off" spellcheck="false"
-      placeholder="Rechercher un nœud… (ex: Ray Charles, Eminem)"/>
-      
+    <div class="search-row">
+
+      <!-- 🎼 Switch vers Mozart -->
+      <a href="./index.html" id="music-switch"
+        title="Retour vers Mozart">
+        🎼
+      </a>
+
+      <input id="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="Rechercher un nœud… (ex: Ray Charles, Eminem)"/>
+
+    </div>
+
     <div id="search-results" aria-label="Résultats de recherche"></div>
   </div>
+
 
 
   <div id="overlay" class="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center z-[2000] transition-opacity duration-[2000ms]">
